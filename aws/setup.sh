@@ -53,5 +53,3 @@ RESTIC_REPOSITORY=$repository
 AWS_ACCESS_KEY_ID=$key_id
 AWS_SECRET_ACCESS_KEY=$secret
 EOF
-
-echo "Done. Next: bacchus init"

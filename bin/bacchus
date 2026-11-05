@@ -33,9 +33,8 @@ set -a
 . "$conf_dir/env"
 set +a
 export RESTIC_PASSWORD_FILE=$conf_dir/machine-password
-# install.sh puts restic here. Look here first, so it wins over an older distro
-# package, and because systemd user services may not have it on PATH.
-PATH=$HOME/.local/bin:$PATH
+# Use the restic that install.sh puts here, whatever other restic is installed.
+PATH=$HOME/.local/lib/bacchus:$PATH
 
 # Read a passphrase without echoing it.
 ask() {

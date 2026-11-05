@@ -35,10 +35,19 @@ desktop with systemd.
 | `bin/bacchus` | runs restic with this machine's repository and credentials, plus the `init`, `backup` and `prune` commands |
 | `systemd/` | timers for the daily backup and the weekly prune and check; failure notification |
 | `aws/template.yaml` | CloudFormation template: the bucket and the backup-only IAM user |
-| `aws/setup.sh` | deploys the stack and writes this machine's access key |
-| `install.sh` | links `bacchus` into `~/.local/bin`, installs the systemd units, creates your lists from the examples, and installs restic if needed |
+| `aws/setup.sh` | deploys the stack and writes this machine's access key; `install.sh` runs it on the first install |
+| `install.sh` | sets up everything on this machine; safe to re-run |
+| `uninstall.sh` | removes it again, asking before deleting anything on AWS |
 
-Each machine also has, outside the repo, `~/.config/bacchus/` (mode 700):
+`install.sh` copies everything it needs out of the checkout, so you can move or
+delete the checkout afterwards:
+
+- `~/.local/bin/bacchus`
+- `~/.local/lib/bacchus/restic`: bacchus's own restic, separate from any other
+- `~/.local/lib/bacchus/uninstall.sh`
+- `~/.config/systemd/user/bacchus*`
+
+Each machine also has `~/.config/bacchus/` (mode 700):
 
 - `includes`, `excludes`: your lists, created by `install.sh`. They're backed up
   along with your files, so a full restore brings them back.
@@ -48,9 +57,8 @@ Each machine also has, outside the repo, `~/.config/bacchus/` (mode 700):
 ## Requirements
 
 - Linux with systemd, on x86-64 or ARM64; bash, curl, bzip2, openssl and notify-send
-- restic 0.18 or newer; `install.sh` installs 0.19.1 if needed
-- For setup and recovery only: AWS CLI v2 and credentials that can manage
-  CloudFormation, S3 and IAM, such as from `aws login`
+- For the first install, recovery and uninstall only: AWS CLI v2 and credentials
+  that can manage CloudFormation, S3 and IAM, such as from `aws login`
 
 ## Setup
 
@@ -61,25 +69,20 @@ Each machine also has, outside the repo, `~/.config/bacchus/` (mode 700):
    cd ~/code/bacchus
    ```
 
-2. `./install.sh`. Besides linking `bacchus` and installing the units, this
-   downloads restic 0.19.1 into `~/.local/bin`, checking it against the checksum in
-   `install.sh`, unless that version or newer is already installed. (Ubuntu
-   24.04's own restic package is too old.)
-3. Edit `~/.config/bacchus/includes` and `~/.config/bacchus/excludes`.
-4. Create the AWS resources and this machine's access key:
-
-   ```sh
-   aws login
-   aws/setup.sh
-   ```
-
-5. `bacchus init`, and choose your passphrase.
-6. Run the first backup and look at it: `bacchus backup`, then `bacchus snapshots`.
-7. Turn on the timers:
-
-   ```sh
-   systemctl --user enable --now bacchus.timer bacchus-prune.timer
-   ```
+2. `aws login`, or get other AWS credentials that can manage CloudFormation, S3
+   and IAM.
+3. `./install.sh`. This:
+   - downloads restic 0.19.1 into `~/.local/lib/bacchus`, checking it against the
+     checksum in `install.sh`
+   - copies `bacchus` and the systemd units into place
+   - creates `~/.config/bacchus/includes` and `excludes` from the examples
+   - creates the CloudFormation stack `bacchus-<hostname>` and this machine's
+     access key, using `aws/setup.sh`
+   - creates the repository, asking you to choose your passphrase
+   - turns on the timers
+4. Edit `~/.config/bacchus/includes` and `excludes` before the first scheduled
+   backup, around midnight. To try them out: `bacchus backup`, then
+   `bacchus snapshots`.
 
 ## Everyday use
 
@@ -114,26 +117,26 @@ and this repository.
 
 On the replacement machine:
 
-1. Follow setup steps 1 and 2. Leave the lists alone; step 6 restores yours.
+1. Follow setup steps 1 and 2.
 2. Find the old machine's stack:
 
    ```sh
    aws cloudformation describe-stacks --query "Stacks[?starts_with(StackName, 'bacchus-')].StackName"
    ```
 
-3. `aws/setup.sh bacchus-<old hostname>`. When it asks, delete the old
-   machine's access key, so the old machine can no longer reach the bucket.
-4. `bacchus init`, and enter your passphrase. This gives the new machine its
-   own key to the repository.
-5. Remove the old machine's restic key: `bacchus key list`, then
+3. `./install.sh bacchus-<old hostname>`. When it asks, delete the old machine's
+   access key, so the old machine can no longer reach the bucket. Then enter your
+   passphrase, which gives the new machine its own key to the repository. Leave
+   the lists it creates alone; step 5 restores yours.
+4. Remove the old machine's restic key: `bacchus key list`, then
    `bacchus key remove <ID>` for the `bacchus` key with the old hostname
    (not the one marked `*`, which is the new machine's).
-6. Restore: `bacchus snapshots`, then `bacchus restore latest --target /`.
+5. Restore: `bacchus snapshots`, then `bacchus restore latest --target /`.
    This also puts back your `includes` and `excludes`. If your username has
    changed, restore to `--target ~/restore` and move the files into place.
-7. To carry on backing up from the new machine into the same bucket, turn on the
-   timers (setup step 7). Snapshots are grouped by hostname, so the old machine's
-   latest snapshots are kept as well.
+
+From then on the new machine backs up into the same bucket. Snapshots are grouped
+by hostname, so the old machine's latest snapshots are kept as well.
 
 ### Forgotten passphrase (machine still works)
 
@@ -163,25 +166,25 @@ Give `STACK` if it isn't `bacchus-<hostname>`.
 
 - `~/.config/bacchus/includes`, `excludes`: used from the next backup on.
 - Retention: the `--keep-*` options in `bin/bacchus`.
-- systemd units: re-run `./install.sh`.
+- `bin/bacchus`, systemd units: re-run `./install.sh` to copy them in again. After
+  the first install it doesn't touch AWS, so it needs no credentials.
 - `aws/template.yaml`: `aws login`, then `aws/setup.sh`. This updates the stack and
   leaves the access key alone.
-- restic: `restic self-update`, which checks the release signature itself.
+- restic: `bacchus self-update` runs restic's own updater, which checks the release
+  signature. Re-running `install.sh` keeps the newer version.
 
 ## Uninstall
 
-```sh
-systemctl --user disable --now bacchus.timer bacchus-prune.timer
-rm ~/.local/bin/bacchus ~/.config/systemd/user/bacchus*
-rm -r ~/.config/bacchus
-rm ~/.local/bin/restic        # if install.sh installed it and nothing else uses it
-```
+`./uninstall.sh`, or `~/.local/lib/bacchus/uninstall.sh` if the checkout is gone,
+stops and removes the timers, units, `bacchus` command and its restic, then asks
+whether to also delete:
 
-To remove the AWS side, delete the user's access keys
-(`aws iam list-access-keys --user-name <stack>`, then `aws iam delete-access-key`),
-then `aws cloudformation delete-stack --stack-name <stack>`. The bucket and the
-backups in it are kept on purpose. Empty and delete the bucket in the S3 console
-if you really want them gone.
+- the AWS stack, its IAM user and access keys (needs `aws login`). This stops
+  backups from every machine using that stack.
+- `~/.config/bacchus`
+
+The bucket and the backups in it are always kept. To delete them for good, empty
+and delete the bucket in the S3 console.
 
 ## Cost
 
