@@ -1,0 +1,6 @@
+[Unit]
+Description=Notify that a backup job failed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/notify-send --urgency=critical --app-name=bacchus "Backup failed" "See: journalctl --user -u 'bacchus*'"

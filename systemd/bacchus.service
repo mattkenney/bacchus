@@ -1,0 +1,17 @@
+[Unit]
+Description=Back up home directories to S3 with restic
+OnFailure=bacchus-failed.service
+# Retry for about an hour (e.g. no network yet after resume), then give up.
+StartLimitIntervalSec=2h
+StartLimitBurst=6
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/bacchus backup
+Restart=on-failure
+RestartSec=10min
+# Don't retry when retrying won't help: unreadable files (3), no repository (10),
+# wrong password (12).
+RestartPreventExitStatus=3 10 12
+Nice=10
+IOSchedulingClass=idle

@@ -1,0 +1,9 @@
+# restic exclude patterns; see `restic help backup`. A pattern without a
+# leading / matches at any depth. $VARS are expanded, so avoid a literal $.
+# install.sh copies this to ~/.config/bacchus/excludes; edit that copy.
+.cache
+node_modules
+__pycache__
+.venv
+*.swp
+.~lock.*#

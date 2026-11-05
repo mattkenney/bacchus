@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# bacchus: back up selected home directories to S3 with restic.
+#
+#   bacchus init              create the repository, or connect this machine to it
+#   bacchus backup [options]  back up the directories in ~/.config/bacchus/includes
+#   bacchus prune             apply the retention policy, prune, and check
+#   bacchus <restic command>  any other restic command, e.g. snapshots, restore
+#
+# Two restic keys open the repository: a passphrase you choose and remember,
+# which isn't stored anywhere, and a random password for this machine, which
+# the timers use.
+set -euo pipefail
+
+case ${1:-} in
+  '' | -h | --help | help)
+    sed -n '2,/^[^#]/s/^# \{0,1\}//p' "$0"
+    exit 2
+    ;;
+esac
+
+conf_dir=${XDG_CONFIG_HOME:-$HOME/.config}/bacchus
+
+if [[ ! -r $conf_dir/env ]]; then
+  echo "bacchus: $conf_dir/env not found; run aws/setup.sh first" >&2
+  exit 1
+fi
+
+# Use only the backup user's key. Stray AWS_* variables from the shell, such as a
+# session token from `aws login`, would otherwise be mixed in with it.
+unset "${!AWS_@}" "${!RESTIC_@}"
+set -a
+# shellcheck source=/dev/null
+. "$conf_dir/env"
+set +a
+export RESTIC_PASSWORD_FILE=$conf_dir/machine-password
+# install.sh puts restic here. Look here first, so it wins over an older distro
+# package, and because systemd user services may not have it on PATH.
+PATH=$HOME/.local/bin:$PATH
+
+# Read a passphrase without echoing it.
+ask() {
+  local answer
+  IFS= read -rsp "$1: " answer || return
+  echo >&2
+  printf '%s' "$answer"
+}
+
+# Run a command with the given passphrase instead of the machine password.
+with_passphrase() {
+  local passphrase=$1
+  shift
+  env -u RESTIC_PASSWORD_FILE RESTIC_PASSWORD="$passphrase" "$@"
+}
+
+init() {
+  if [[ ! -e $RESTIC_PASSWORD_FILE ]]; then
+    (umask 077 && openssl rand -base64 32 >"$RESTIC_PASSWORD_FILE")
+  fi
+  local status=0 error passphrase
+  error=$(restic cat config --no-lock 2>&1 >/dev/null) || status=$?
+  case $status in
+    0)
+      echo "Already set up: this machine's password opens the repository."
+      return
+      ;;
+    10)
+      echo "Creating the repository. Choose a passphrase you'll remember, such as"
+      echo "several random words. It isn't stored anywhere, and it's the only way into"
+      echo "the backups if this machine is lost."
+      passphrase=$(ask "New passphrase")
+      if [[ -z $passphrase || $passphrase != "$(ask "Repeat it")" ]]; then
+        echo "The passphrases are empty or don't match." >&2
+        return 1
+      fi
+      with_passphrase "$passphrase" restic init
+      ;;
+    12)
+      echo "The repository exists. Enter its passphrase to add this machine."
+      passphrase=$(ask "Passphrase")
+      ;;
+    *)
+      echo "$error" >&2
+      return "$status"
+      ;;
+  esac
+  with_passphrase "$passphrase" restic key add --new-password-file "$RESTIC_PASSWORD_FILE" \
+    --host "$(hostname -s)" --user bacchus
+}
+
+backup() {
+  local list dirs
+  for list in includes excludes; do
+    if [[ ! -r $conf_dir/$list ]]; then
+      echo "bacchus: $conf_dir/$list not found; run install.sh" >&2
+      return 1
+    fi
+  done
+  mapfile -t dirs < <(sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d' \
+    "$conf_dir/includes")
+  # The lists themselves are backed up too, so a full restore brings them back.
+  restic backup --retry-lock 1h --exclude-caches --exclude-file "$conf_dir/excludes" \
+    "$@" "${dirs[@]/#/$HOME/}" "$conf_dir/includes" "$conf_dir/excludes"
+}
+
+prune() {
+  # Group by host only, so editing includes doesn't start a new series of
+  # snapshots and leave the old one's last snapshots kept forever.
+  restic forget --retry-lock 1h --prune --group-by host \
+    --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --keep-yearly 5
+  restic check --retry-lock 1h
+}
+
+case $1 in
+  init) init ;;
+  backup) shift; backup "$@" ;;
+  prune) prune ;;
+  *) exec restic "$@" ;;
+esac

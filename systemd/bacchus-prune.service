@@ -1,0 +1,16 @@
+[Unit]
+Description=Apply restic retention policy, prune, and check the repository
+OnFailure=bacchus-failed.service
+# If both are due at once (e.g. at wake), let the backup go first.
+After=bacchus.service
+StartLimitIntervalSec=2h
+StartLimitBurst=6
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/bacchus prune
+Restart=on-failure
+RestartSec=10min
+RestartPreventExitStatus=10 12
+Nice=10
+IOSchedulingClass=idle

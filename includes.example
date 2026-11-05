@@ -1,0 +1,4 @@
+# Directories to back up, relative to $HOME, one per line.
+# install.sh copies this to ~/.config/bacchus/includes; edit that copy.
+.ssh
+Documents

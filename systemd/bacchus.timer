@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily restic backup to S3
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=30min
+# Run at wake/boot if the machine was asleep or off at the scheduled time.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  bacchus: an S3 bucket for a restic repository, and an IAM user whose
+  access key can use only that bucket. With versioning on and no permission to
+  delete versions, anything the key deletes or overwrites stays recoverable for
+  NoncurrentDays days.
+
+Parameters:
+  NoncurrentDays:
+    Type: Number
+    Default: 550
+    MinValue: 1
+    Description: Days to keep deleted or overwritten objects before removing them for good
+
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+    # Deleting the stack leaves the bucket, and the backups in it, in place.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-versions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: !Ref NoncurrentDays
+            ExpiredObjectDeleteMarker: true
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+  User:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref AWS::StackName
+      Policies:
+        - PolicyName: restic-repository
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !GetAtt Bucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub "${Bucket.Arn}/*"
+
+Outputs:
+  Repository:
+    Description: restic repository URL
+    Value: !Sub "s3:s3.${AWS::Region}.${AWS::URLSuffix}/${Bucket}"
+  UserName:
+    Description: IAM user whose access key the backups use
+    Value: !Ref User
