@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
 # Remove bacchus from this machine: stop and remove the timers and units, the
 # bacchus command, and its restic. Then ask whether to also delete the AWS stack
 # and access key, and ~/.config/bacchus. The bucket and the backups in it are

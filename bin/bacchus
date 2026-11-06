@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
 # bacchus: back up selected home directories to S3 with restic.
 #
 #   bacchus init              create the repository, or connect this machine to it
@@ -13,7 +14,7 @@ set -euo pipefail
 
 case ${1:-} in
   '' | -h | --help | help)
-    sed -n '2,/^[^#]/s/^# \{0,1\}//p' "$0"
+    sed -n '3,/^[^#]/s/^# \{0,1\}//p' "$0"
     exit 2
     ;;
 esac

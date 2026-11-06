@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
 # Set up bacchus on this machine, or bring it up to date. Safe to re-run.
 #   usage: ./install.sh [STACK]
 #

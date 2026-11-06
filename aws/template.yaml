@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   bacchus: an S3 bucket for a restic repository, and an IAM user whose

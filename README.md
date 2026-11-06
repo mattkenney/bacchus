@@ -193,3 +193,11 @@ cost cents a month, plus a little for requests. Data that restic deletes is bill
 for 550 more days as old versions, so you pay for about 18 months' worth of whatever
 prune deletes; for a repository of mostly documents that's cents a month. Downloading data
 for a restore costs about $0.09 per GB.
+
+## License
+
+Copyright 2026 Matt Kenney
+
+bacchus is free software: you can redistribute it and/or modify it under the
+terms of version 3 of the GNU General Public License as published by the Free
+Software Foundation. See [LICENSE](LICENSE).

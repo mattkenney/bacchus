@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
 # Create or update the CloudFormation stack (bucket and backup-only IAM user),
 # then give this machine an access key for that user, written to
 # ~/.config/bacchus/env.
