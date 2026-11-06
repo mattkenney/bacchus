@@ -53,3 +53,17 @@ RESTIC_REPOSITORY=$repository
 AWS_ACCESS_KEY_ID=$key_id
 AWS_SECRET_ACCESS_KEY=$secret
 EOF
+
+# A new key takes a few seconds to start working. Wait for it, so whatever runs
+# next (bacchus init, from install.sh) doesn't fail with Access Denied.
+echo "Waiting for the new access key to start working"
+for _ in {1..30}; do
+  if env -u AWS_PROFILE -u AWS_SESSION_TOKEN AWS_ACCESS_KEY_ID="$key_id" \
+    AWS_SECRET_ACCESS_KEY="$secret" aws s3api head-bucket --bucket "${repository##*/}" \
+    >/dev/null 2>&1; then
+    exit 0
+  fi
+  sleep 2
+done
+echo "The new access key still doesn't work after a minute; try again later." >&2
+exit 1
